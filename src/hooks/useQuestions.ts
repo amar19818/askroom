@@ -3,39 +3,21 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Question } from '@/types/questions';
 import { toast } from '@/hooks/use-toast';
+import { moderateContent } from '@/utils/geminiModeration';
 
-export const useQuestions = () => {
+export const useQuestions = (roomId?: string) => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch initial questions
   useEffect(() => {
-    const fetchQuestions = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('questions')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setQuestions(data || []);
-      } catch (error) {
-        console.error('Error fetching questions:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load questions",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    if (!roomId) {
+      setIsLoading(false);
+      return;
+    }
 
     fetchQuestions();
-  }, []);
-
-  // Set up real-time subscription
-  useEffect(() => {
+    
+    // Set up real-time subscription
     const channel = supabase
       .channel('questions-changes')
       .on(
@@ -47,7 +29,9 @@ export const useQuestions = () => {
         },
         (payload) => {
           console.log('New question:', payload.new);
-          setQuestions(prev => [payload.new as Question, ...prev]);
+          if (payload.new.room_id === roomId) {
+            fetchQuestions(); // Refetch to get student data
+          }
         }
       )
       .on(
@@ -59,11 +43,9 @@ export const useQuestions = () => {
         },
         (payload) => {
           console.log('Question updated:', payload.new);
-          setQuestions(prev => 
-            prev.map(q => 
-              q.id === payload.new.id ? payload.new as Question : q
-            )
-          );
+          if (payload.new.room_id === roomId) {
+            fetchQuestions(); // Refetch to get updated data
+          }
         }
       )
       .subscribe();
@@ -71,20 +53,68 @@ export const useQuestions = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [roomId]);
 
-  // Filter questions older than 5 minutes
-  const recentQuestions = questions.filter(question => {
-    const questionTime = new Date(question.created_at).getTime();
-    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-    return questionTime > fiveMinutesAgo;
-  }).sort((a, b) => b.upvotes - a.upvotes);
+  const fetchQuestions = async () => {
+    if (!roomId) return;
 
-  const submitQuestion = async (text: string) => {
     try {
+      const { data, error } = await supabase
+        .from('questions')
+        .select(`
+          *,
+          students!inner(name, college_name)
+        `)
+        .eq('room_id', roomId)
+        .eq('is_moderated', true)
+        .eq('moderation_status', 'approved')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      const questionsWithStudents = data?.map(q => ({
+        ...q,
+        student: q.students
+      })) || [];
+      
+      setQuestions(questionsWithStudents);
+    } catch (error) {
+      console.error('Error fetching questions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load questions",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const submitQuestion = async (text: string, studentId: string) => {
+    if (!roomId) return;
+
+    try {
+      // Moderate content with Gemini AI
+      const moderation = await moderateContent(text);
+      
+      if (!moderation.isAppropriate) {
+        toast({
+          title: "Question Rejected",
+          description: moderation.reason || "Your question contains inappropriate content",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('questions')
-        .insert([{ text: text.trim() }]);
+        .insert([{
+          text: text.trim(),
+          room_id: roomId,
+          student_id: studentId,
+          is_moderated: true,
+          moderation_status: 'approved'
+        }]);
 
       if (error) throw error;
 
@@ -121,6 +151,13 @@ export const useQuestions = () => {
       throw error;
     }
   };
+
+  // Filter questions from the last 5 minutes and sort by upvotes
+  const recentQuestions = questions.filter(question => {
+    const questionTime = new Date(question.created_at).getTime();
+    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+    return questionTime > fiveMinutesAgo;
+  }).sort((a, b) => b.upvotes - a.upvotes);
 
   return {
     questions: recentQuestions,
