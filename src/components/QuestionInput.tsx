@@ -18,7 +18,7 @@ export const QuestionInput: React.FC<QuestionInputProps> = ({ onSubmit }) => {
     const lastSubmitTime = localStorage.getItem('lastQuestionSubmit');
     if (lastSubmitTime) {
       const timeDiff = Date.now() - parseInt(lastSubmitTime);
-      const cooldownMs = 60000; // 60 seconds
+      const cooldownMs = 30000; // 30 seconds cooldown
       
       if (timeDiff < cooldownMs) {
         setCanSubmit(false);
@@ -56,7 +56,7 @@ export const QuestionInput: React.FC<QuestionInputProps> = ({ onSubmit }) => {
       // Set cooldown
       localStorage.setItem('lastQuestionSubmit', Date.now().toString());
       setCanSubmit(false);
-      setTimeUntilCanSubmit(60);
+      setTimeUntilCanSubmit(30);
       
       const interval = setInterval(() => {
         setTimeUntilCanSubmit(prev => {
@@ -87,7 +87,7 @@ export const QuestionInput: React.FC<QuestionInputProps> = ({ onSubmit }) => {
             type="text"
             value={newQuestion}
             onChange={(e) => setNewQuestion(e.target.value)}
-            placeholder="Ask a question..."
+            placeholder="Ask a question... (Content will be moderated)"
             className={`flex-1 px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm ${
               isDark 
                 ? 'bg-gray-800/70 border-gray-600 text-white placeholder-gray-400'
@@ -107,17 +107,20 @@ export const QuestionInput: React.FC<QuestionInputProps> = ({ onSubmit }) => {
                 : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 hover:scale-105 shadow-lg'
             }`}
           >
-            {isSubmitting ? 'Sending...' : canSubmit ? 'Send' : `Wait ${timeUntilCanSubmit}s`}
+            {isSubmitting ? 'Moderating...' : canSubmit ? 'Send' : `Wait ${timeUntilCanSubmit}s`}
           </button>
         </form>
         
-        {!canSubmit && (
-          <p className={`text-sm mt-2 text-center ${
-            isDark ? 'text-gray-400' : 'text-gray-500'
-          }`}>
-            You can submit another question in {timeUntilCanSubmit} seconds
+        <div className={`text-xs mt-2 text-center ${
+          isDark ? 'text-gray-400' : 'text-gray-500'
+        }`}>
+          {!canSubmit && (
+            <p>You can submit another question in {timeUntilCanSubmit} seconds</p>
+          )}
+          <p className="mt-1">
+            🛡️ All questions are automatically moderated using AI for appropriate content
           </p>
-        )}
+        </div>
       </div>
     </div>
   );

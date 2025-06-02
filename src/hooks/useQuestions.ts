@@ -15,6 +15,8 @@ export const useQuestions = () => {
         const { data, error } = await supabase
           .from('questions')
           .select('*')
+          .eq('is_moderated', true)
+          .eq('moderation_status', 'approved')
           .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -34,20 +36,34 @@ export const useQuestions = () => {
     fetchQuestions();
   }, []);
 
-  // Set up real-time subscription
+  // Set up real-time subscription for approved questions only
   useEffect(() => {
     const channel = supabase
       .channel('questions-changes')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: 'UPDATE',
           schema: 'public',
           table: 'questions'
         },
         (payload) => {
-          console.log('New question:', payload.new);
-          setQuestions(prev => [payload.new as Question, ...prev]);
+          const updatedQuestion = payload.new as Question;
+          if (updatedQuestion.is_moderated && updatedQuestion.moderation_status === 'approved') {
+            console.log('Approved question:', updatedQuestion);
+            setQuestions(prev => {
+              const existingIndex = prev.findIndex(q => q.id === updatedQuestion.id);
+              if (existingIndex >= 0) {
+                // Update existing question
+                const newQuestions = [...prev];
+                newQuestions[existingIndex] = updatedQuestion;
+                return newQuestions;
+              } else {
+                // Add new approved question
+                return [updatedQuestion, ...prev];
+              }
+            });
+          }
         }
       )
       .on(
@@ -58,12 +74,15 @@ export const useQuestions = () => {
           table: 'questions'
         },
         (payload) => {
-          console.log('Question updated:', payload.new);
-          setQuestions(prev => 
-            prev.map(q => 
-              q.id === payload.new.id ? payload.new as Question : q
-            )
-          );
+          const updatedQuestion = payload.new as Question;
+          // Handle upvote updates for approved questions
+          if (updatedQuestion.is_moderated && updatedQuestion.moderation_status === 'approved') {
+            setQuestions(prev => 
+              prev.map(q => 
+                q.id === updatedQuestion.id ? updatedQuestion : q
+              )
+            );
+          }
         }
       )
       .subscribe();
@@ -73,7 +92,7 @@ export const useQuestions = () => {
     };
   }, []);
 
-  // Filter questions older than 5 minutes
+  // Filter questions older than 5 minutes and sort by upvotes
   const recentQuestions = questions.filter(question => {
     const questionTime = new Date(question.created_at).getTime();
     const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
@@ -82,9 +101,35 @@ export const useQuestions = () => {
 
   const submitQuestion = async (text: string) => {
     try {
+      // First, moderate the content
+      const { data: moderationData, error: moderationError } = await supabase.functions
+        .invoke('moderate-content', {
+          body: { text: text.trim() }
+        });
+
+      if (moderationError) {
+        throw new Error('Content moderation failed');
+      }
+
+      const isApproved = moderationData?.isApproved || false;
+      
+      if (!isApproved) {
+        toast({
+          title: "Question Blocked",
+          description: "Your question contains inappropriate content and cannot be submitted.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // If approved, insert the question
       const { error } = await supabase
         .from('questions')
-        .insert([{ text: text.trim() }]);
+        .insert([{ 
+          text: text.trim(),
+          is_moderated: true,
+          moderation_status: 'approved'
+        }]);
 
       if (error) throw error;
 
@@ -96,7 +141,7 @@ export const useQuestions = () => {
       console.error('Error submitting question:', error);
       toast({
         title: "Error",
-        description: "Failed to submit question",
+        description: "Failed to submit question. Please try again.",
         variant: "destructive",
       });
       throw error;

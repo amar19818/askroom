@@ -1,6 +1,6 @@
 
 import React, { useRef } from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Shield } from 'lucide-react';
 import { useQuestions } from '@/hooks/useQuestions';
 import { useTheme } from '@/contexts/ThemeContext';
 import { QuestionCard } from '@/components/QuestionCard';
@@ -47,9 +47,15 @@ const Index = () => {
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               AskRoom.live
             </h1>
-            <p className={`mt-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-              Ask questions anonymously in real-time
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className={`${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                Ask questions anonymously in real-time
+              </p>
+              <div className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                <Shield size={12} />
+                <span>AI Moderated</span>
+              </div>
+            </div>
           </div>
           <button
             onClick={toggleTheme}
@@ -91,6 +97,10 @@ const Index = () => {
                 <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
                   Be the first to ask a question!
                 </p>
+                <div className="mt-4 text-sm text-green-600 flex items-center justify-center gap-2">
+                  <Shield size={16} />
+                  <span>All questions are automatically moderated for appropriate content</span>
+                </div>
               </div>
             </div>
           ) : (
