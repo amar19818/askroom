@@ -4,10 +4,9 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 interface QuestionInputProps {
   onSubmit: (text: string) => Promise<void>;
-  roomId?: string;
 }
 
-export const QuestionInput: React.FC<QuestionInputProps> = ({ onSubmit, roomId }) => {
+export const QuestionInput: React.FC<QuestionInputProps> = ({ onSubmit }) => {
   const [newQuestion, setNewQuestion] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [canSubmit, setCanSubmit] = useState(true);
@@ -16,9 +15,7 @@ export const QuestionInput: React.FC<QuestionInputProps> = ({ onSubmit, roomId }
 
   // Check if user can submit based on localStorage
   useEffect(() => {
-    if (!roomId) return;
-    
-    const lastSubmitTime = localStorage.getItem(`lastQuestionSubmit_${roomId}`);
+    const lastSubmitTime = localStorage.getItem('lastQuestionSubmit');
     if (lastSubmitTime) {
       const timeDiff = Date.now() - parseInt(lastSubmitTime);
       const cooldownMs = 60000; // 60 seconds
@@ -43,7 +40,7 @@ export const QuestionInput: React.FC<QuestionInputProps> = ({ onSubmit, roomId }
         return () => clearInterval(interval);
       }
     }
-  }, [roomId]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,22 +54,20 @@ export const QuestionInput: React.FC<QuestionInputProps> = ({ onSubmit, roomId }
       setNewQuestion('');
       
       // Set cooldown
-      if (roomId) {
-        localStorage.setItem(`lastQuestionSubmit_${roomId}`, Date.now().toString());
-        setCanSubmit(false);
-        setTimeUntilCanSubmit(60);
-        
-        const interval = setInterval(() => {
-          setTimeUntilCanSubmit(prev => {
-            if (prev <= 1) {
-              setCanSubmit(true);
-              clearInterval(interval);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      }
+      localStorage.setItem('lastQuestionSubmit', Date.now().toString());
+      setCanSubmit(false);
+      setTimeUntilCanSubmit(60);
+      
+      const interval = setInterval(() => {
+        setTimeUntilCanSubmit(prev => {
+          if (prev <= 1) {
+            setCanSubmit(true);
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (error) {
       // Error is handled in the hook
     } finally {

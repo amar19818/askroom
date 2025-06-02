@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, Moon, Sun } from 'lucide-react';
 import { Question } from '@/types/questions';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -31,26 +31,9 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
       }}
     >
       <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <p className="text-lg leading-relaxed mb-3">
-            {question.text}
-          </p>
-          
-          {/* Student information */}
-          {question.student && (
-            <div className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-600'} mb-2`}>
-              <span className="font-medium">{question.student.name}</span>
-              <span className={`ml-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                from {question.student.college_name}
-              </span>
-            </div>
-          )}
-          
-          <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-            {new Date(question.created_at).toLocaleTimeString()}
-          </div>
-        </div>
-        
+        <p className="text-lg flex-1 leading-relaxed">
+          {question.text}
+        </p>
         <button
           onClick={() => onUpvote(question.id, question.upvotes)}
           disabled={hasUpvoted}
@@ -67,6 +50,9 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
           <ArrowUp size={18} />
           <span className="font-semibold">{question.upvotes}</span>
         </button>
+      </div>
+      <div className={`mt-4 text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+        {new Date(question.created_at).toLocaleTimeString()}
       </div>
     </div>
   );
