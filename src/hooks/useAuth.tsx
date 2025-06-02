@@ -1,5 +1,4 @@
-
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import React, { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Student, Admin, AuthSession } from '@/types/auth';
 import { toast } from '@/hooks/use-toast';
