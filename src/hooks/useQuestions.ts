@@ -4,6 +4,34 @@ import { supabase } from '@/integrations/supabase/client';
 import { Question } from '@/types/questions';
 import { toast } from '@/hooks/use-toast';
 
+// Generate a user identifier based on browser fingerprint and IP simulation
+const generateUserIdentifier = () => {
+  const stored = localStorage.getItem('user_identifier');
+  if (stored) return stored;
+  
+  const identifier = `${navigator.userAgent}_${navigator.language}_${screen.width}x${screen.height}_${Date.now()}`;
+  const hash = btoa(identifier).slice(0, 16);
+  localStorage.setItem('user_identifier', hash);
+  return hash;
+};
+
+// Penalty system management
+const getPenaltyData = () => {
+  const data = localStorage.getItem('penalty_data');
+  return data ? JSON.parse(data) : { violations: 0, lastViolation: null, isBlocked: false };
+};
+
+const setPenaltyData = (data: any) => {
+  localStorage.setItem('penalty_data', JSON.stringify(data));
+};
+
+const calculatePenalty = (violations: number) => {
+  if (violations === 0) return 30; // Base cooldown
+  if (violations === 1) return 90; // +60 seconds
+  if (violations === 2) return 150; // +60 seconds more
+  return Infinity; // Blocked after 3 violations
+};
+
 export const useQuestions = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,42 +127,86 @@ export const useQuestions = () => {
   }).sort((a, b) => b.upvotes - a.upvotes);
 
   const submitQuestion = async (text: string) => {
+    const penaltyData = getPenaltyData();
+    
+    // Check if user is blocked
+    if (penaltyData.isBlocked) {
+      toast({
+        title: "Account Blocked",
+        description: "Your account has been blocked due to repeated violations. Please contact support.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      // First, moderate the content
+      const userIdentifier = generateUserIdentifier();
+      
+      // First, moderate the content with enhanced features
       const { data: moderationData, error: moderationError } = await supabase.functions
         .invoke('moderate-content', {
-          body: { text: text.trim() }
+          body: { 
+            text: text.trim(),
+            userIdentifier 
+          }
         });
 
       if (moderationError) {
         throw new Error('Content moderation failed');
       }
 
-      const isApproved = moderationData?.isApproved || false;
+      const { isApproved, correctedText, reason, severity } = moderationData;
       
       if (!isApproved) {
+        // Increment violations and apply penalty
+        const newViolations = penaltyData.violations + 1;
+        const penaltyTime = calculatePenalty(newViolations);
+        
+        const newPenaltyData = {
+          violations: newViolations,
+          lastViolation: Date.now(),
+          isBlocked: newViolations >= 3
+        };
+        
+        setPenaltyData(newPenaltyData);
+        
+        // Update localStorage for extended cooldown
+        if (penaltyTime < Infinity) {
+          localStorage.setItem('lastQuestionSubmit', Date.now().toString());
+          localStorage.setItem('penaltyCooldown', penaltyTime.toString());
+        }
+
         toast({
           title: "Question Blocked",
-          description: "Your question contains inappropriate content and cannot be submitted.",
+          description: newPenaltyData.isBlocked 
+            ? "Account blocked due to repeated violations."
+            : `Inappropriate content detected. Cooldown increased to ${Math.floor(penaltyTime)}s. Violations: ${newViolations}/3. Reason: ${reason}`,
           variant: "destructive",
         });
         return;
       }
 
-      // If approved, insert the question
+      // If approved, use corrected text and insert the question
+      const finalText = correctedText || text.trim();
+      
       const { error } = await supabase
         .from('questions')
         .insert([{ 
-          text: text.trim(),
+          text: finalText,
           is_moderated: true,
           moderation_status: 'approved'
         }]);
 
       if (error) throw error;
 
+      // Show success message with correction info if text was corrected
+      const successMessage = correctedText !== text.trim() 
+        ? "Question submitted successfully! (Minor spelling corrections were applied)"
+        : "Question submitted successfully!";
+
       toast({
         title: "Success",
-        description: "Question submitted successfully!",
+        description: successMessage,
       });
     } catch (error) {
       console.error('Error submitting question:', error);
