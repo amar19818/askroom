@@ -14,7 +14,7 @@ export const useQuestions = () => {
       try {
         const { data, error } = await supabase
           .from('questions')
-          .select('*')
+          .select('id, text, created_at, upvotes, is_moderated, moderation_status')
           .eq('is_moderated', true)
           .eq('moderation_status', 'approved')
           .order('created_at', { ascending: false });
