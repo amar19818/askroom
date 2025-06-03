@@ -43,26 +43,15 @@ export const useQuestions = () => {
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: 'INSERT',
           schema: 'public',
           table: 'questions'
         },
         (payload) => {
-          const updatedQuestion = payload.new as Question;
-          if (updatedQuestion.is_moderated && updatedQuestion.moderation_status === 'approved') {
-            console.log('Approved question:', updatedQuestion);
-            setQuestions(prev => {
-              const existingIndex = prev.findIndex(q => q.id === updatedQuestion.id);
-              if (existingIndex >= 0) {
-                // Update existing question
-                const newQuestions = [...prev];
-                newQuestions[existingIndex] = updatedQuestion;
-                return newQuestions;
-              } else {
-                // Add new approved question
-                return [updatedQuestion, ...prev];
-              }
-            });
+          const newQuestion = payload.new as Question;
+          if (newQuestion.is_moderated && newQuestion.moderation_status === 'approved') {
+            console.log('New approved question:', newQuestion);
+            setQuestions(prev => [newQuestion, ...prev]);
           }
         }
       )
@@ -75,13 +64,23 @@ export const useQuestions = () => {
         },
         (payload) => {
           const updatedQuestion = payload.new as Question;
-          // Handle upvote updates for approved questions
           if (updatedQuestion.is_moderated && updatedQuestion.moderation_status === 'approved') {
-            setQuestions(prev => 
-              prev.map(q => 
-                q.id === updatedQuestion.id ? updatedQuestion : q
-              )
-            );
+            console.log('Question approved:', updatedQuestion);
+            setQuestions(prev => {
+              const existingIndex = prev.findIndex(q => q.id === updatedQuestion.id);
+              if (existingIndex >= 0) {
+                // Update existing question
+                const newQuestions = [...prev];
+                newQuestions[existingIndex] = updatedQuestion;
+                return newQuestions;
+              } else {
+                // Add new approved question
+                return [updatedQuestion, ...prev];
+              }
+            });
+          } else if (updatedQuestion.moderation_status === 'rejected') {
+            // Remove rejected questions from the list
+            setQuestions(prev => prev.filter(q => q.id !== updatedQuestion.id));
           }
         }
       )

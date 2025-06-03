@@ -13,18 +13,24 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_moderated: boolean
+          moderation_status: string
           text: string
           upvotes: number
         }
         Insert: {
           created_at?: string
           id?: string
+          is_moderated?: boolean
+          moderation_status?: string
           text: string
           upvotes?: number
         }
         Update: {
           created_at?: string
           id?: string
+          is_moderated?: boolean
+          moderation_status?: string
           text?: string
           upvotes?: number
         }
